@@ -25,11 +25,10 @@ import akka.actor.typed.scaladsl.adapter.TypedActorSystemOps
 import akka.actor.typed.scaladsl.{ Behaviors, Routers }
 import akka.actor.typed.{ ActorSystem, Behavior, Terminated }
 import org.lunatechlabs.dotty.sudoku.{ SudokuProblemSender, SudokuSolver, SudokuSolverSettings }
-
-import scala.Console.{ GREEN, RESET }
 import scala.io.StdIn
+import scala.Console.{ GREEN, RESET }
 
-object Main {
+object Main:
   def apply(): Behavior[NotUsed] =
     Behaviors.setup { context =>
       val sudokuSolverSettings = SudokuSolverSettings("sudokusolver.conf")
@@ -45,16 +44,13 @@ object Main {
           Behaviors.stopped
       }
     }
-}
 
-object SudokuSolverMain {
+object SudokuSolverMain:
 
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit =
 
     val system = ActorSystem[NotUsed](Main(), "sudoku-solver-system")
 
     println(s"${GREEN}Hit RETURN to stop solver${RESET}")
     StdIn.readLine()
     system.terminate()
-  }
-}
