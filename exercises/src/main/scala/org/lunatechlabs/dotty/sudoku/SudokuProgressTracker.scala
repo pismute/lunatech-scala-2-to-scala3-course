@@ -31,10 +31,9 @@ class SudokuProgressTracker private (
   def trackProgress(updatesInFlight: Int): Behavior[Command] =
     Behaviors.receiveMessage {
       case NewUpdatesInFlight(updateCount) if updatesInFlight - 1 == 0 =>
-        rowDetailProcessors.foreach {
-          case (_, processor) =>
+        rowDetailProcessors.foreach ((_, processor) =>
             processor ! SudokuDetailProcessor.GetSudokuDetailState(context.self)
-        }
+        )
         collectEndState()
       case NewUpdatesInFlight(updateCount) =>
         trackProgress(updatesInFlight + updateCount)

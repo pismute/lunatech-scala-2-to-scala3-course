@@ -1,45 +1,56 @@
-# Top Level Definitions
+# Parameter untupling
 
 ## Background
 
-Dotty now has support for `Top Level Definitions`. In short, these replace Scala
-2's `package object`s. Definitions such as methods, [given] values, type aliases
-can be written at the top level.
+The need to write a pattern-matching decomposition when mapping over a sequence 
+of tuples has always annoyed some Scala developers. So many might appreciate this 
+new feature.
 
-The goal of this exercise is to remove package objects from our codebase and
-replace it with `Top Level Definitions`.
-
-The following is a typical `package object`
+Consider you have a list of pairs
 
 ```scala
-package foo.bar
-
-package object baz {
-  def x(a: Int): Int = {
-    a
-  }
-}
+val pairs = List(1, 2, 3).zipWithIndex
+// pairs: List[(Int, Int)] = List((1,0), (2,1), (3,2))
 ```
 
-This can be written in a toplevel definition as follows
+Imagine you want to map `pairs` to a list of `Int`s so that each pair of numbers is 
+mapped to their sum. The best way to do this in _Scala 2.x_ was with a pattern 
+matching anonymous function.
 
 ```scala
-package foo.bar.baz
-
-def x(a: Int): Int = {
-  a
+pairs map {
+  case (x, y) => x + y
 }
+// res1: List[Int] = List(1, 3, 5)
+```
+Dotty now allows us to write
+
+```scala
+pairs map {
+  (x, y) => x + y
+}
+// val res0: List[Int] = List(1, 3, 5)
+```
+or
+
+```scala
+pairs.map(_ + _)
+// val res1: List[Int] = List(1, 3, 5)
 ```
 
 ## Steps
 
-- Find any package objects available in the existing project
+- We can apply the new way of encoding in several places in the source code.
 
-- Create a new source file inside the same package using any meaningful name
+- Have a look for them in the following files:
+  - `ReductionRules.scala`
+  - `SudokuProblemSender.scala`
+  - `SudokuProgressTracker.scala`
+  - `SudokuSolver.scala`
+  - `TopLevelDefinitions.scala` (we chose to put the content of the package
+                               object in a file with this name.)
 
-- Copy the contents of the `package object` to the newly created source file
-
-- Remove the package object
+- Identify them and replace the pattern-matching syntax with the new syntax
 
 - Run the provided tests by executing the `test` command from the `sbt` prompt
   and verify that all tests pass

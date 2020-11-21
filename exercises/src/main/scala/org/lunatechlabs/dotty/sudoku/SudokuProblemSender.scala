@@ -15,7 +15,7 @@ object SudokuProblemSender:
   private val rowUpdates: Vector[SudokuDetailProcessor.RowUpdate] =
     SudokuIO
       .readSudokuFromFile(new File("sudokus/001.sudoku"))
-      .map { case (rowIndex, update) => SudokuDetailProcessor.RowUpdate(rowIndex, update) }
+      .map ((rowIndex, update) => SudokuDetailProcessor.RowUpdate(rowIndex, update))
 
   def apply(sudokuSolver: ActorRef[SudokuSolver.Command],
             sudokuSolverSettings: SudokuSolverSettings

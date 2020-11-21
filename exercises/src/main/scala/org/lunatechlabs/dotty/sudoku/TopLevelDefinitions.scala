@@ -40,7 +40,7 @@ implicit class SudokuFieldOps(val sudokuField: SudokuField) extends AnyVal:
   def flipHorizontally: SudokuField = sudokuField.rotateCW.flipVertically.rotateCCW
 
   def rowSwap(row1: Int, row2: Int): SudokuField =
-    SudokuField(  
+    SudokuField(
       sudokuField.sudoku.zipWithIndex.map {
       case (_, `row1`) => sudokuField.sudoku(row2)
       case (_, `row2`) => sudokuField.sudoku(row1)
@@ -70,6 +70,6 @@ implicit class SudokuFieldOps(val sudokuField: SudokuField) extends AnyVal:
       .map(_.zipWithIndex)
       .map(row => row.filterNot(_._1 == Set(0)))
       .zipWithIndex.filter(_._1.nonEmpty)
-      .map { case (c, i) =>
+      .map { (c, i) =>
         RowUpdate(i, c.map(_.swap))
       }
