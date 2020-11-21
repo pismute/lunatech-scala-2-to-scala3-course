@@ -15,39 +15,37 @@ object SudokuIO {
     (for  (subRow <- 0 until 3)  yield printSubRow(subRow)).mkString("\n")
   }
 
-  def printRowShort( row: ReductionSet): String = {
+  def printRowShort( row: ReductionSet): String =
     (for
       (elem <- row)
     yield {
       if (elem.size == 1) elem.head.toString else " "
     }).mkString("|","|","|")
 
-  }
 
-  private def sudokuCellRepresentation(content: CellContent): String = {
+  private def sudokuCellRepresentation(content: CellContent): String =
     content.toList match {
       case Nil => "x"
       case singleValue +: Nil => singleValue.toString
       case _ => " "
     }
-  }
 
   private def sudokuRowPrinter(threeRows: Vector[ReductionSet]): String = {
     val rowSubBlocks = for {
       row <- threeRows
       rowSubBlock <- row.map(el => sudokuCellRepresentation(el)).sliding(3,3)
       rPres = rowSubBlock.mkString
+    }
 
-    } yield rPres
+    yield rPres
     rowSubBlocks.sliding(3,3).map(_.mkString("", "|", "")).mkString("|", "|\n|", "|\n")
   }
 
-  def sudokuPrinter(result: SudokuSolver.SudokuSolution): String = {
+  def sudokuPrinter(result: SudokuSolver.SudokuSolution): String =
     result.sudoku
       .sliding(3,3)
       .map(sudokuRowPrinter)
       .mkString("\n+---+---+---+\n", "+---+---+---+\n", "+---+---+---+")
-  }
 
   /*
    * FileLineTraversable code taken from "Scala in Depth" by Joshua Suereth
@@ -76,20 +74,21 @@ object SudokuIO {
               input.close()
               fr.close()
               false
-            } else {
+            }
+            else {
               cachedLine = Some(line)
               true
             }
-          } catch {
+          }
+          catch {
             case e: java.io.IOError =>
               throw new IllegalStateException(e.toString)
           }
       }
 
       override def next(): String = {
-        if (! hasNext) {
+        if (! hasNext)
           throw new NoSuchElementException("No more lines in file")
-        }
         val currentLine = cachedLine.get
         cachedLine = None
         currentLine
@@ -107,8 +106,9 @@ object SudokuIO {
           (index, Set(c.toString.toInt)) +: cellUpdates
         case (cellUpdates, _) => cellUpdates
       }
+    }
 
-    } yield (row, updates)
+    yield (row, updates)
 
 
   def readSudokuFromFile(sudokuInputFile: java.io.File): Vector[(Int, CellUpdates)] = {

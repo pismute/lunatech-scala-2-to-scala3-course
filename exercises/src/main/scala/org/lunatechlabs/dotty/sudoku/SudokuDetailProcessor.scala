@@ -114,5 +114,5 @@ class SudokuDetailProcessor[DetailType <: SudokoDetailType: UpdateSender] privat
     val allValuesInState = state.flatten
     allValuesInState == allValuesInState.distinct
   }
-
 }
+
