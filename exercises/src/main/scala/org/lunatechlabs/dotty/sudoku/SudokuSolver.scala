@@ -34,7 +34,7 @@ object SudokuSolver:
     import scala.language.implicitConversions
     cellIndexesVector
       .map { index =>
-        val detailProcessorName = implicitly[UpdateSender[A]].processorName(index)
+        val detailProcessorName = summon[UpdateSender[A]].processorName(index)
         val detailProcessor = context.spawn(SudokuDetailProcessor(index), detailProcessorName)
         (index, detailProcessor)
       }
