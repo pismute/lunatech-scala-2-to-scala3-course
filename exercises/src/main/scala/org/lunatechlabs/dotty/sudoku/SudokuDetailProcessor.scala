@@ -52,7 +52,6 @@ object SudokuDetailProcessor:
 
 class SudokuDetailProcessor[DetailType <: SudokoDetailType : UpdateSender] private (context: ActorContext[SudokuDetailProcessor.Command]):
 
-  import ReductionRules.{reductionRuleOne, reductionRuleTwo}
   import SudokuDetailProcessor._
 
   def operational(id: Int, state: ReductionSet, fullyReduced: Boolean): Behavior[Command] =
@@ -64,7 +63,7 @@ class SudokuDetailProcessor[DetailType <: SudokoDetailType : UpdateSender] priva
         replyTo ! SudokuDetailUnchanged
         Behaviors.same
       else
-        val transformedUpdatedState = reductionRuleTwo(reductionRuleOne(updatedState))
+        val transformedUpdatedState = updatedState.applyReductionRuleOne.applyReductionRuleTwo
         if transformedUpdatedState == state then
           replyTo ! SudokuDetailUnchanged
           Behaviors.same
