@@ -32,23 +32,20 @@ object SudokuDetailProcessor:
     def sendUpdate(id: Int, cellUpdates: CellUpdates)(using sender: ActorRef[Response]): Unit
     def processorName(id: Int): String
 
-  given UpdateSender[Row] = new UpdateSender[Row] {
+  given UpdateSender[Row]:
     override def sendUpdate(id: Int, cellUpdates: CellUpdates)(using sender: ActorRef[Response]): Unit =
       sender ! RowUpdate(id, cellUpdates)
     def processorName(id: Int): String = s"row-processor-$id"
-  }
 
-  given UpdateSender[Column] = new UpdateSender[Column] {
+  given UpdateSender[Column]:
     override def sendUpdate(id: Int, cellUpdates: CellUpdates)(using sender: ActorRef[Response]): Unit =
       sender ! ColumnUpdate(id, cellUpdates)
     def processorName(id: Int): String = s"col-processor-$id"
-  }
 
-  given UpdateSender[Block] = new UpdateSender[Block] {
+  given UpdateSender[Block]:
     override def sendUpdate(id: Int, cellUpdates: CellUpdates)(using sender: ActorRef[Response]): Unit =
       sender ! BlockUpdate(id, cellUpdates)
     def processorName(id: Int): String = s"blk-processor-$id"
-  }
 
 class SudokuDetailProcessor[DetailType <: SudokoDetailType : UpdateSender] private (context: ActorContext[SudokuDetailProcessor.Command]):
 
@@ -69,6 +66,9 @@ class SudokuDetailProcessor[DetailType <: SudokoDetailType : UpdateSender] priva
           Behaviors.same
         else
           val updateSender = summon[UpdateSender[DetailType]]
+          // The following can also be written as:
+          // given ActorRef[Response] = replyTo
+          // updateSender.sendUpdate(id, stateChanges(state, transformedUpdatedState))         
           updateSender.sendUpdate(id, stateChanges(state, transformedUpdatedState))(using replyTo)
           operational(id, transformedUpdatedState, isFullyReduced(transformedUpdatedState))
 
@@ -103,3 +103,4 @@ class SudokuDetailProcessor[DetailType <: SudokoDetailType : UpdateSender] priva
   private def isFullyReduced(state: ReductionSet): Boolean =
     val allValuesInState = state.flatten
     allValuesInState == allValuesInState.distinct
+
