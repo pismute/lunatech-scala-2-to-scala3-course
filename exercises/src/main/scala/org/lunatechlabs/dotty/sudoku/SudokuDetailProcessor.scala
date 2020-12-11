@@ -11,15 +11,15 @@ object SudokuDetailProcessor:
     case ResetSudokuDetailState
     case Update(cellUpdates: CellUpdates, replyTo: ActorRef[Response])
     case GetSudokuDetailState(replyTo: ActorRef[SudokuProgressTracker.Command])
-
   export Command._
 
   // My responses
-  sealed trait Response
-  final case class RowUpdate(id: Int, cellUpdates: CellUpdates) extends Response
-  final case class ColumnUpdate(id: Int, cellUpdates: CellUpdates) extends Response
-  final case class BlockUpdate(id: Int, cellUpdates: CellUpdates) extends Response
-  case object SudokuDetailUnchanged extends Response
+  enum Response:
+    case RowUpdate(id: Int, cellUpdates: CellUpdates)
+    case ColumnUpdate(id: Int, cellUpdates: CellUpdates)
+    case BlockUpdate(id: Int, cellUpdates: CellUpdates)
+    case SudokuDetailUnchanged
+  export Response._
 
   val InitialDetailState: ReductionSet = cellIndexesVector.map(_ => initialCell)
 
@@ -55,7 +55,7 @@ class SudokuDetailProcessor[DetailType <: SudokoDetailType : UpdateSender] priva
 
   def operational(id: Int, state: ReductionSet, fullyReduced: Boolean): Behavior[Command] =
     Behaviors.receiveMessage {
-    case Command.Update(cellUpdates, replyTo) if ! fullyReduced =>
+    case Update(cellUpdates, replyTo) if ! fullyReduced =>
       val previousState = state
       val updatedState = mergeState(state, cellUpdates)
       if updatedState == previousState && cellUpdates != cellUpdatesEmpty then
@@ -70,19 +70,19 @@ class SudokuDetailProcessor[DetailType <: SudokoDetailType : UpdateSender] priva
           val updateSender = summon[UpdateSender[DetailType]]
           // The following can also be written as:
           // given ActorRef[Response] = replyTo
-          // updateSender.sendUpdate(id, stateChanges(state, transformedUpdatedState))
+          // updateSender.sendUpdate(id, stateChanges(state, transformedUpdatedState))         
           updateSender.sendUpdate(id, stateChanges(state, transformedUpdatedState))(using replyTo)
           operational(id, transformedUpdatedState, isFullyReduced(transformedUpdatedState))
 
-    case Command.Update(cellUpdates, replyTo) =>
+    case Update(cellUpdates, replyTo) =>
       replyTo ! SudokuDetailUnchanged
       Behaviors.same
 
-    case Command.GetSudokuDetailState(replyTo) =>
+    case GetSudokuDetailState(replyTo) =>
       replyTo ! SudokuProgressTracker.SudokuDetailState(id, state)
       Behaviors.same
 
-    case Command.ResetSudokuDetailState =>
+    case ResetSudokuDetailState =>
       operational(id, InitialDetailState, fullyReduced = false)
 
   }
@@ -105,3 +105,4 @@ class SudokuDetailProcessor[DetailType <: SudokoDetailType : UpdateSender] priva
   private def isFullyReduced(state: ReductionSet): Boolean =
     val allValuesInState = state.flatten
     allValuesInState == allValuesInState.distinct
+

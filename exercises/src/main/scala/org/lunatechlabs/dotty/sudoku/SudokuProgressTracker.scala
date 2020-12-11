@@ -8,12 +8,12 @@ object SudokuProgressTracker:
   enum Command:
     case NewUpdatesInFlight(count: Int)
     case SudokuDetailState(index: Int, state: ReductionSet)
-
   export Command._
 
   // My responses
-  sealed trait Response
-  final case class Result(sudoku: Sudoku) extends Response
+  enum Response:
+    case Result(sudoku: Sudoku)
+  export Response._
 
   def apply(rowDetailProcessors: Map[Int, ActorRef[SudokuDetailProcessor.Command]],
             sudokuSolver: ActorRef[Response]
@@ -33,32 +33,32 @@ class SudokuProgressTracker private (
 
   def trackProgress(updatesInFlight: Int): Behavior[Command] =
     Behaviors.receiveMessage {
-      case Command.NewUpdatesInFlight(updateCount) if updatesInFlight - 1 == 0 =>
+      case NewUpdatesInFlight(updateCount) if updatesInFlight - 1 == 0 =>
         rowDetailProcessors.foreach ((_, processor) =>
             processor ! SudokuDetailProcessor.GetSudokuDetailState(context.self)
         )
         collectEndState()
-      case Command.NewUpdatesInFlight(updateCount) =>
+      case NewUpdatesInFlight(updateCount) =>
         trackProgress(updatesInFlight + updateCount)
-      case msg: Command.SudokuDetailState =>
+      case msg: SudokuDetailState =>
         context.log.error("Received unexpected message in state 'trackProgress': {}", msg)
         Behaviors.same
     }
 
   def collectEndState(remainingRows: Int = 9,
-                      endState: Vector[Command.SudokuDetailState] = Vector.empty[Command.SudokuDetailState]
+                      endState: Vector[SudokuDetailState] = Vector.empty[SudokuDetailState]
   ): Behavior[Command] =
     Behaviors.receiveMessage {
-      case detail: Command.SudokuDetailState if remainingRows == 1 =>
+      case detail: SudokuDetailState if remainingRows == 1 =>
         sudokuSolver ! Result(
-          (detail +: endState).sortBy { case Command.SudokuDetailState(idx, _) => idx }.map {
-            case Command.SudokuDetailState(_, state) => state
+          (detail +: endState).sortBy { case SudokuDetailState(idx, _) => idx }.map {
+            case SudokuDetailState(_, state) => state
           }
         )
         trackProgress(updatesInFlight = 0)
-      case detail: Command.SudokuDetailState =>
+      case detail: SudokuDetailState =>
         collectEndState(remainingRows = remainingRows - 1, detail +: endState)
-      case msg: Command.NewUpdatesInFlight =>
+      case msg: NewUpdatesInFlight =>
         context.log.error("Received unexpected message in state 'collectEndState': {}", msg)
         Behaviors.same
     }
