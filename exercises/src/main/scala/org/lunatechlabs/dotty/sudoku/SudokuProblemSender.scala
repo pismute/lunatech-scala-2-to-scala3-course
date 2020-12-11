@@ -9,9 +9,9 @@ object SudokuProblemSender:
 
   enum Command:
     case SendNewSudoku
-    // Wrapped responses
-    case SolutionWrapper(result: SudokuSolver.Response)
   export Command._
+
+  type CommandAndResponses = Command | SudokuSolver.Response
 
   private val rowUpdates: Vector[SudokuDetailProcessor.RowUpdate] =
     SudokuIO
@@ -19,23 +19,18 @@ object SudokuProblemSender:
       .map ((rowIndex, update) => SudokuDetailProcessor.RowUpdate(rowIndex, update))
 
   def apply(sudokuSolver: ActorRef[SudokuSolver.Command],
-            sudokuSolverSettings: SudokuSolverSettings
-  ): Behavior[Command] =
-    Behaviors.setup { context =>
+            sudokuSolverSettings: SudokuSolverSettings): Behavior[Command] =
+    Behaviors.setup[CommandAndResponses] { context =>
       Behaviors.withTimers { timers =>
         new SudokuProblemSender(sudokuSolver, context, timers, sudokuSolverSettings).sending()
       }
-    }
+    }.narrow // Restrict the actor's [external] protocol to its set of commands
 
 class SudokuProblemSender private (sudokuSolver: ActorRef[SudokuSolver.Command],
-                                   context: ActorContext[SudokuProblemSender.Command],
-                                   timers: TimerScheduler[SudokuProblemSender.Command],
-                                   sudokuSolverSettings: SudokuSolverSettings
-):
+                                   context: ActorContext[SudokuProblemSender.CommandAndResponses],
+                                   timers: TimerScheduler[SudokuProblemSender.CommandAndResponses],
+                                   sudokuSolverSettings: SudokuSolverSettings):
   import SudokuProblemSender._
-
-  private val solutionWrapper: ActorRef[SudokuSolver.Response] =
-    context.messageAdapter(response => SolutionWrapper(response))
 
   private val initialSudokuField = rowUpdates.toSudokuField
 
@@ -75,14 +70,14 @@ class SudokuProblemSender private (sudokuSolver: ActorRef[SudokuSolver.Command],
                                problemSendInterval
   ) // on a 5 node RPi 4 based cluster in steady state, this can be lowered to about 6ms
 
-  def sending(): Behavior[Command] =
+  def sending(): Behavior[CommandAndResponses] = 
     Behaviors.receiveMessage {
       case SendNewSudoku =>
         context.log.debug("sending new sudoku problem")
         val nextRowUpdates = rowUpdatesSeq.next
-        sudokuSolver ! SudokuSolver.InitialRowUpdates(nextRowUpdates, solutionWrapper)
+        sudokuSolver ! SudokuSolver.InitialRowUpdates(nextRowUpdates, context.self)
         Behaviors.same
-      case SolutionWrapper(solution: SudokuSolver.SudokuSolution) =>
+      case solution: SudokuSolver.SudokuSolution =>
         context.log.info(s"${SudokuIO.sudokuPrinter(solution)}")
         Behaviors.same
     }

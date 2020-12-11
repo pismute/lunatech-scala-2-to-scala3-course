@@ -14,20 +14,19 @@ object SudokuSolver:
   enum Command:
     case InitialRowUpdates(rowUpdates: Vector[SudokuDetailProcessor.RowUpdate],
                                      replyTo: ActorRef[SudokuSolver.Response])
-  // Wrapped responses
-    case SudokuDetailProcessorResponseWrapped(response: SudokuDetailProcessor.Response)
-    case SudokuProgressTrackerResponseWrapped(response: SudokuProgressTracker.Response)
   export Command._
 
   // My Responses
   enum Response:
     case SudokuSolution(sudoku: Sudoku)
   export Response._
+
+  type CommandAndResponses = Command | SudokuDetailProcessor.Response | SudokuProgressTracker.Response
   
   import SudokuDetailProcessor.UpdateSender
 
   def genDetailProcessors[A <: SudokoDetailType: UpdateSender](
-    context: ActorContext[Command]
+    context: ActorContext[CommandAndResponses]
   ): Map[Int, ActorRef[SudokuDetailProcessor.Command]] =
     import scala.language.implicitConversions
     cellIndexesVector
@@ -40,7 +39,7 @@ object SudokuSolver:
 
   def apply(sudokuSolverSettings: SudokuSolverSettings): Behavior[Command] =
     Behaviors
-      .supervise[Command] {
+      .supervise[CommandAndResponses] {
         Behaviors.withStash(capacity = sudokuSolverSettings.SudokuSolver.StashBufferSize) {
           buffer =>
             Behaviors.setup { context =>
@@ -51,18 +50,13 @@ object SudokuSolver:
       .onFailure[Exception](
         SupervisorStrategy
           .restartWithBackoff(minBackoff = 5.seconds, maxBackoff = 1.minute, randomFactor = 0.2)
-      )
+      ).narrow
 
-class SudokuSolver private (context: ActorContext[SudokuSolver.Command],
-                            buffer: StashBuffer[SudokuSolver.Command]
+class SudokuSolver private (context: ActorContext[SudokuSolver.CommandAndResponses],
+                            buffer: StashBuffer[SudokuSolver.CommandAndResponses]
 ):
   import CellMappings._
   import SudokuSolver._
-
-  val detailProcessorResponseMapper: ActorRef[SudokuDetailProcessor.Response] =
-    context.messageAdapter(response => SudokuDetailProcessorResponseWrapped(response))
-  val progressTrackerResponseMapper: ActorRef[SudokuProgressTracker.Response] =
-    context.messageAdapter(response => SudokuProgressTrackerResponseWrapped(response))
 
   private val rowDetailProcessors = genDetailProcessors[Row](context)
   private val columnDetailProcessors = genDetailProcessors[Column](context)
@@ -71,17 +65,17 @@ class SudokuSolver private (context: ActorContext[SudokuSolver.Command],
     List(rowDetailProcessors, columnDetailProcessors, blockDetailProcessors)
 
   private val progressTracker =
-    context.spawn(SudokuProgressTracker(rowDetailProcessors, progressTrackerResponseMapper),
+    context.spawn(SudokuProgressTracker(rowDetailProcessors, context.self),
                   "sudoku-progress-tracker"
     )
 
-  def idle(): Behavior[Command] =
+  def idle(): Behavior[CommandAndResponses] =
     Behaviors.receiveMessage {
 
       case InitialRowUpdates(rowUpdates, sender) =>
         rowUpdates.foreach {
           case SudokuDetailProcessor.RowUpdate(row, cellUpdates) =>
-            rowDetailProcessors(row) ! SudokuDetailProcessor.Update(cellUpdates, detailProcessorResponseMapper)
+            rowDetailProcessors(row) ! SudokuDetailProcessor.Update(cellUpdates, context.self)
         }
         progressTracker ! SudokuProgressTracker.NewUpdatesInFlight(rowUpdates.size)
         processRequest(Some(sender), System.currentTimeMillis())
@@ -91,58 +85,56 @@ class SudokuSolver private (context: ActorContext[SudokuSolver.Command],
 
     }
 
-  def processRequest(requestor: Option[ActorRef[Response]], startTime: Long): Behavior[Command] =
+  def processRequest(requestor: Option[ActorRef[Response]], startTime: Long): Behavior[CommandAndResponses] =
     Behaviors.receiveMessage {
-      case SudokuDetailProcessorResponseWrapped(response) =>
-        response match
-          case SudokuDetailProcessor.RowUpdate(rowNr, updates) =>
-            updates.foreach { (rowCellNr, newCellContent) =>
-              val (columnNr, columnCellNr) = rowToColumnCoordinates(rowNr, rowCellNr)
-              val columnUpdate = Vector(columnCellNr -> newCellContent)
-              columnDetailProcessors(columnNr) ! SudokuDetailProcessor.Update(columnUpdate, detailProcessorResponseMapper)
+      case SudokuDetailProcessor.RowUpdate(rowNr, updates) =>
+        updates.foreach { (rowCellNr, newCellContent) =>
+          val (columnNr, columnCellNr) = rowToColumnCoordinates(rowNr, rowCellNr)
+          val columnUpdate = Vector(columnCellNr -> newCellContent)
+          columnDetailProcessors(columnNr) ! SudokuDetailProcessor.Update(columnUpdate, context.self)
 
-              val (blockNr, blockCellNr) = rowToBlockCoordinates(rowNr, rowCellNr)
-              val blockUpdate = Vector(blockCellNr -> newCellContent)
-              blockDetailProcessors(blockNr) ! SudokuDetailProcessor.Update(blockUpdate, detailProcessorResponseMapper)
-            }
-            progressTracker ! SudokuProgressTracker.NewUpdatesInFlight(2 * updates.size - 1)
-            Behaviors.same
-          case SudokuDetailProcessor.ColumnUpdate(columnNr, updates) =>
-            updates.foreach { (colCellNr, newCellContent) =>
-              val (rowNr, rowCellNr) = columnToRowCoordinates(columnNr, colCellNr)
-              val rowUpdate = Vector(rowCellNr -> newCellContent)
-              rowDetailProcessors(rowNr) ! SudokuDetailProcessor.Update(rowUpdate, detailProcessorResponseMapper)
+          val (blockNr, blockCellNr) = rowToBlockCoordinates(rowNr, rowCellNr)
+          val blockUpdate = Vector(blockCellNr -> newCellContent)
+          blockDetailProcessors(blockNr) ! SudokuDetailProcessor.Update(blockUpdate, context.self)
+        }
+        progressTracker ! SudokuProgressTracker.NewUpdatesInFlight(2 * updates.size - 1)
+        Behaviors.same
+      case SudokuDetailProcessor.ColumnUpdate(columnNr, updates) =>
+        updates.foreach { (colCellNr, newCellContent) =>
+          val (rowNr, rowCellNr) = columnToRowCoordinates(columnNr, colCellNr)
+          val rowUpdate = Vector(rowCellNr -> newCellContent)
+          rowDetailProcessors(rowNr) ! SudokuDetailProcessor.Update(rowUpdate, context.self)
 
-              val (blockNr, blockCellNr) = columnToBlockCoordinates(columnNr, colCellNr)
-              val blockUpdate = Vector(blockCellNr -> newCellContent)
-              blockDetailProcessors(blockNr) ! SudokuDetailProcessor.Update(blockUpdate, detailProcessorResponseMapper)
-            }
-            progressTracker ! SudokuProgressTracker.NewUpdatesInFlight(2 * updates.size - 1)
-            Behaviors.same
-          case SudokuDetailProcessor.BlockUpdate(blockNr, updates) =>
-            updates.foreach { (blockCellNr, newCellContent) =>
-              val (rowNr, rowCellNr) = blockToRowCoordinates(blockNr, blockCellNr)
-              val rowUpdate = Vector(rowCellNr -> newCellContent)
-              rowDetailProcessors(rowNr) ! SudokuDetailProcessor.Update(rowUpdate, detailProcessorResponseMapper)
+          val (blockNr, blockCellNr) = columnToBlockCoordinates(columnNr, colCellNr)
+          val blockUpdate = Vector(blockCellNr -> newCellContent)
+          blockDetailProcessors(blockNr) ! SudokuDetailProcessor.Update(blockUpdate, context.self)
+        }
+        progressTracker ! SudokuProgressTracker.NewUpdatesInFlight(2 * updates.size - 1)
+        Behaviors.same
+      case SudokuDetailProcessor.BlockUpdate(blockNr, updates) =>
+        updates.foreach { (blockCellNr, newCellContent) =>
+          val (rowNr, rowCellNr) = blockToRowCoordinates(blockNr, blockCellNr)
+          val rowUpdate = Vector(rowCellNr -> newCellContent)
+          rowDetailProcessors(rowNr) ! SudokuDetailProcessor.Update(rowUpdate, context.self)
 
-              val (columnNr, columnCellNr) = blockToColumnCoordinates(blockNr, blockCellNr)
-              val columnUpdate = Vector(columnCellNr -> newCellContent)
-              columnDetailProcessors(columnNr) ! SudokuDetailProcessor.Update(columnUpdate, detailProcessorResponseMapper)
-            }
-            progressTracker ! SudokuProgressTracker.NewUpdatesInFlight(2 * updates.size - 1)
-            Behaviors.same
-          case unchanged @ SudokuDetailProcessor.SudokuDetailUnchanged =>
-            progressTracker ! SudokuProgressTracker.NewUpdatesInFlight(-1)
-            Behaviors.same
-      case SudokuProgressTrackerResponseWrapped(result) =>
-        result match
-          case SudokuProgressTracker.Result(sudoku) =>
-            context.log.info(
-              s"Sudoku processing time: ${System.currentTimeMillis() - startTime} milliseconds"
-            )
-            requestor.get ! SudokuSolution(sudoku)
-            resetAllDetailProcessors()
-            buffer.unstashAll(idle())
+          val (columnNr, columnCellNr) = blockToColumnCoordinates(blockNr, blockCellNr)
+          val columnUpdate = Vector(columnCellNr -> newCellContent)
+          columnDetailProcessors(columnNr) ! SudokuDetailProcessor.Update(columnUpdate, context.self)
+        }
+        progressTracker ! SudokuProgressTracker.NewUpdatesInFlight(2 * updates.size - 1)
+        Behaviors.same
+      case unchanged @ SudokuDetailProcessor.SudokuDetailUnchanged =>
+        progressTracker ! SudokuProgressTracker.NewUpdatesInFlight(-1)
+        Behaviors.same
+
+      case SudokuProgressTracker.Result(sudoku) =>
+        context.log.info(
+          s"Sudoku processing time: ${System.currentTimeMillis() - startTime} milliseconds"
+        )
+        requestor.get ! SudokuSolution(sudoku)
+        resetAllDetailProcessors()
+        buffer.unstashAll(idle())
+
       case msg: InitialRowUpdates if buffer.isFull =>
         context.log.info(s"DROPPING REQUEST")
         Behaviors.same
