@@ -11,17 +11,13 @@ final case class SudokuField(sudoku: Sudoku)
 object SudokuSolver:
 
   // SudokuSolver Protocol
-  sealed trait Command
-  final case class InitialRowUpdates(rowUpdates: Vector[SudokuDetailProcessor.RowUpdate],
-                                     replyTo: ActorRef[SudokuSolver.Response]
-  ) extends Command
-  // Wrapped responses
-  private final case class SudokuDetailProcessorResponseWrapped(
-    response: SudokuDetailProcessor.Response
-  ) extends Command
-  private final case class SudokuProgressTrackerResponseWrapped(
-    response: SudokuProgressTracker.Response
-  ) extends Command
+  enum Command:
+    case InitialRowUpdates(rowUpdates: Vector[SudokuDetailProcessor.RowUpdate],
+                           replyTo: ActorRef[SudokuSolver.Response])
+    // Wrapped responses
+    case SudokuDetailProcessorResponseWrapped(response: SudokuDetailProcessor.Response) extends Command
+    case SudokuProgressTrackerResponseWrapped(response: SudokuProgressTracker.Response) extends Command
+
   // My Responses
   sealed trait Response
   final case class SudokuSolution(sudoku: Sudoku) extends Response
@@ -62,9 +58,9 @@ class SudokuSolver private (context: ActorContext[SudokuSolver.Command],
   import SudokuSolver._
 
   val detailProcessorResponseMapper: ActorRef[SudokuDetailProcessor.Response] =
-    context.messageAdapter(response => SudokuDetailProcessorResponseWrapped(response))
+    context.messageAdapter(response => Command.SudokuDetailProcessorResponseWrapped(response))
   val progressTrackerResponseMapper: ActorRef[SudokuProgressTracker.Response] =
-    context.messageAdapter(response => SudokuProgressTrackerResponseWrapped(response))
+    context.messageAdapter(response => Command.SudokuProgressTrackerResponseWrapped(response))
 
   private val rowDetailProcessors = genDetailProcessors[Row](context)
   private val columnDetailProcessors = genDetailProcessors[Column](context)
@@ -80,7 +76,7 @@ class SudokuSolver private (context: ActorContext[SudokuSolver.Command],
   def idle(): Behavior[Command] =
     Behaviors.receiveMessage {
 
-      case InitialRowUpdates(rowUpdates, sender) =>
+      case Command.InitialRowUpdates(rowUpdates, sender) =>
         rowUpdates.foreach {
           case SudokuDetailProcessor.RowUpdate(row, cellUpdates) =>
             rowDetailProcessors(row) ! SudokuDetailProcessor.Update(cellUpdates, detailProcessorResponseMapper)
@@ -95,7 +91,7 @@ class SudokuSolver private (context: ActorContext[SudokuSolver.Command],
 
   def processRequest(requestor: Option[ActorRef[Response]], startTime: Long): Behavior[Command] =
     Behaviors.receiveMessage {
-      case SudokuDetailProcessorResponseWrapped(response) =>
+      case Command.SudokuDetailProcessorResponseWrapped(response) =>
         response match
           case SudokuDetailProcessor.RowUpdate(rowNr, updates) =>
             updates.foreach { (rowCellNr, newCellContent) =>
@@ -136,7 +132,7 @@ class SudokuSolver private (context: ActorContext[SudokuSolver.Command],
           case unchanged @ SudokuDetailProcessor.SudokuDetailUnchanged =>
             progressTracker ! SudokuProgressTracker.NewUpdatesInFlight(-1)
             Behaviors.same
-      case SudokuProgressTrackerResponseWrapped(result) =>
+      case Command.SudokuProgressTrackerResponseWrapped(result) =>
         result match
           case SudokuProgressTracker.Result(sudoku) =>
             context.log.info(
@@ -145,10 +141,10 @@ class SudokuSolver private (context: ActorContext[SudokuSolver.Command],
             requestor.get ! SudokuSolution(sudoku)
             resetAllDetailProcessors()
             buffer.unstashAll(idle())
-      case msg: InitialRowUpdates if buffer.isFull =>
+      case msg: Command.InitialRowUpdates if buffer.isFull =>
         context.log.info(s"DROPPING REQUEST")
         Behaviors.same
-      case msg: InitialRowUpdates =>
+      case msg: Command.InitialRowUpdates =>
         buffer.stash(msg)
         Behaviors.same
     }

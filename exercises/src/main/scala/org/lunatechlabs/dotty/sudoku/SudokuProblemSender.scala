@@ -7,10 +7,10 @@ import akka.actor.typed.{ ActorRef, Behavior }
 
 object SudokuProblemSender:
 
-  sealed trait Command
-  case object SendNewSudoku extends Command
-  // Wrapped responses
-  private final case class SolutionWrapper(result: SudokuSolver.Response) extends Command
+  enum  Command:
+    case SendNewSudoku
+    // Wrapped responses
+    case SolutionWrapper(result: SudokuSolver.Response)
 
   private val rowUpdates: Vector[SudokuDetailProcessor.RowUpdate] =
     SudokuIO
@@ -34,7 +34,7 @@ class SudokuProblemSender private (sudokuSolver: ActorRef[SudokuSolver.Command],
   import SudokuProblemSender._
 
   private val solutionWrapper: ActorRef[SudokuSolver.Response] =
-    context.messageAdapter(response => SolutionWrapper(response))
+    context.messageAdapter(response => Command.SolutionWrapper(response))
 
   private val initialSudokuField = rowUpdates.toSudokuField
 
@@ -70,18 +70,18 @@ class SudokuProblemSender private (sudokuSolver: ActorRef[SudokuSolver.Command],
     .iterator
 
   private val problemSendInterval = sudokuSolverSettings.ProblemSender.SendInterval
-  timers.startTimerAtFixedRate(SendNewSudoku,
+  timers.startTimerAtFixedRate(Command.SendNewSudoku,
                                problemSendInterval
   ) // on a 5 node RPi 4 based cluster in steady state, this can be lowered to about 6ms
 
   def sending(): Behavior[Command] =
     Behaviors.receiveMessage {
-      case SendNewSudoku =>
+      case Command.SendNewSudoku =>
         context.log.debug("sending new sudoku problem")
         val nextRowUpdates = rowUpdatesSeq.next
-        sudokuSolver ! SudokuSolver.InitialRowUpdates(nextRowUpdates, solutionWrapper)
+        sudokuSolver ! SudokuSolver.Command.InitialRowUpdates(nextRowUpdates, solutionWrapper)
         Behaviors.same
-      case SolutionWrapper(solution: SudokuSolver.SudokuSolution) =>
+      case Command.SolutionWrapper(solution: SudokuSolver.SudokuSolution) =>
         context.log.info(s"${SudokuIO.sudokuPrinter(solution)}")
         Behaviors.same
     }
