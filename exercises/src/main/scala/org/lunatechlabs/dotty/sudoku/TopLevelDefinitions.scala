@@ -16,6 +16,8 @@ object CellUpdates:
   def apply(updates: (Int, Set[Int])*): CellUpdates = Vector(updates: _*)
 val cellUpdatesEmpty: CellUpdates = Vector.empty[(Int, Set[Int])]
 
+given Eql[CellUpdates, CellUpdates] = Eql.derived
+
 extension[A] (updates: CellUpdates)
 
   /**
@@ -32,8 +34,6 @@ extension[A] (updates: CellUpdates)
 
 extension (update: (Int, Set[Int]))
   def +: (updates: CellUpdates): CellUpdates = update +: updates
-
-given Eql[CellUpdates, CellUpdates] = Eql.derived
 
 import SudokuDetailProcessor.RowUpdate
 

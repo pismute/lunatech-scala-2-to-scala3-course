@@ -13,8 +13,6 @@ object SudokuProblemSender:
 
   type CommandAndResponses = Command | SudokuSolver.Response
 
-  given Eql[Command, CommandAndResponses] = Eql.derived
-
   private val rowUpdates: Vector[SudokuDetailProcessor.RowUpdate] =
     SudokuIO
       .readSudokuFromFile(new File("sudokus/001.sudoku"))
@@ -72,7 +70,7 @@ class SudokuProblemSender private (sudokuSolver: ActorRef[SudokuSolver.Command],
                                problemSendInterval
   ) // on a 5 node RPi 4 based cluster in steady state, this can be lowered to about 6ms
 
-  def sending(): Behavior[CommandAndResponses] =
+  def sending(): Behavior[CommandAndResponses] = 
     Behaviors.receiveMessage {
       case SendNewSudoku =>
         context.log.debug("sending new sudoku problem")
