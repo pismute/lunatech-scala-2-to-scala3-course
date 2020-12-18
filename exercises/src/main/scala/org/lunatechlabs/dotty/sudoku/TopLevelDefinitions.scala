@@ -1,5 +1,7 @@
 package org.lunatechlabs.dotty.sudoku
 
+import scala.collection.Factory
+
 private val N = 9
 val CELLPossibleValues: Vector[Int] = (1 to N).toVector
 val cellIndexesVector: Vector[Int] = Vector.range(0, N)
@@ -11,21 +13,25 @@ type Sudoku = Vector[ReductionSet]
 
 opaque type CellUpdates = Vector[(Int, Set[Int])]
 object CellUpdates:
-  def apply(xs: (Int, Set[Int])*): CellUpdates = Vector(xs: _*)
-  val empty: CellUpdates = Vector.empty[(Int, Set[Int])]
+  def apply(updates: (Int, Set[Int])*): CellUpdates = Vector(updates: _*)
+val cellUpdatesEmpty: CellUpdates = Vector.empty[(Int, Set[Int])]
 
-extension[A] (xs: CellUpdates):
-  def to(factory: scala.collection.Factory[(Int, Set[Int]), A]): A = xs.to(factory)
-  def foldLeft(z: A)(op: (A, (Int, Set[Int])) => A): A = xs.foldLeft(z)(op)
-  def foreach = xs.foreach
+extension[A] (updates: CellUpdates)
 
-extension (xs: CellUpdates):
-  def size = xs.size
+  /**
+   * Optionally, given that we only use `to(Map)`, we can create a non-generic extension method
+   * For ex.: def toMap: Map[Int, Set[Int]] = updates.to(Map).withDefaultValue(Set(0))
+   */
+  def to(factory: Factory[(Int, Set[Int]), A]): A = updates.to(factory)
 
-val cellUpdatesEmpty = CellUpdates.empty
+  def foldLeft(z: A)(op: (A, (Int, Set[Int])) => A): A = updates.foldLeft(z)(op)
 
-extension (x: (Int, Set[Int])):
-  def +:(xs: CellUpdates): CellUpdates = x +: xs
+  def foreach(f: ((Int, Set[Int])) => A): Unit = updates.foreach(f)
+
+  def size: Int = updates.size
+
+extension (update: (Int, Set[Int]))
+  def +: (updates: CellUpdates): CellUpdates = update +: updates
 
 import SudokuDetailProcessor.RowUpdate
 
