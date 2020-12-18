@@ -9,8 +9,23 @@ type CellContent = Set[Int]
 type ReductionSet = Vector[CellContent]
 type Sudoku = Vector[ReductionSet]
 
-type CellUpdates = Vector[(Int, Set[Int])]
-val cellUpdatesEmpty = Vector.empty[(Int, Set[Int])]
+opaque type CellUpdates = Vector[(Int, Set[Int])]
+object CellUpdates:
+  def apply(xs: (Int, Set[Int])*): CellUpdates = Vector(xs: _*)
+  val empty: CellUpdates = Vector.empty[(Int, Set[Int])]
+
+extension[A] (xs: CellUpdates):
+  def to(factory: scala.collection.Factory[(Int, Set[Int]), A]): A = xs.to(factory)
+  def foldLeft(z: A)(op: (A, (Int, Set[Int])) => A): A = xs.foldLeft(z)(op)
+  def foreach = xs.foreach
+
+extension (xs: CellUpdates):
+  def size = xs.size
+
+val cellUpdatesEmpty = CellUpdates.empty
+
+extension (x: (Int, Set[Int])):
+  def +:(xs: CellUpdates): CellUpdates = x +: xs
 
 import SudokuDetailProcessor.RowUpdate
 
