@@ -23,6 +23,8 @@ object SudokuSolver:
 
   type CommandAndResponses = Command | SudokuDetailProcessor.Response | SudokuProgressTracker.Response
 
+  given Eql[SudokuDetailProcessor.Response, CommandAndResponses] = Eql.derived
+
   import SudokuDetailProcessor.UpdateSender
 
   def genDetailProcessors[A <: SudokoDetailType: UpdateSender](

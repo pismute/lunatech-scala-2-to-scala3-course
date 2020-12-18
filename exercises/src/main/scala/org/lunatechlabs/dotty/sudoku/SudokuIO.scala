@@ -3,11 +3,12 @@ package org.lunatechlabs.dotty.sudoku
 import java.util.NoSuchElementException
 
 object SudokuIO:
+  given Eql[Nothing, Any] = Eql.derived
 
   def printRow( row: ReductionSet): String =
     def printSubRow( subRowNo: Int): String =
       val printItems = List(1,2,3).map( x => x + subRowNo * 3)
-      (for  elem <- row 
+      (for  elem <- row
         yield {
           (printItems.map (item => if (elem & printItems.toSet).contains(item) then item.toString else " ")).mkString("")
         }).mkString("| ", " | ", " |")

@@ -13,6 +13,8 @@ object SudokuDetailProcessor:
     case GetSudokuDetailState(replyTo: ActorRef[SudokuProgressTracker.Command])
   export Command._
 
+  given Eql[Command, Command] = Eql.derived
+
   // My responses
   enum Response:
     case RowUpdate(id: Int, cellUpdates: CellUpdates)
@@ -70,7 +72,7 @@ class SudokuDetailProcessor[DetailType <: SudokoDetailType : UpdateSender] priva
           val updateSender = summon[UpdateSender[DetailType]]
           // The following can also be written as:
           // given ActorRef[Response] = replyTo
-          // updateSender.sendUpdate(id, stateChanges(state, transformedUpdatedState))         
+          // updateSender.sendUpdate(id, stateChanges(state, transformedUpdatedState))
           updateSender.sendUpdate(id, stateChanges(state, transformedUpdatedState))(using replyTo)
           operational(id, transformedUpdatedState, isFullyReduced(transformedUpdatedState))
 
@@ -105,4 +107,3 @@ class SudokuDetailProcessor[DetailType <: SudokoDetailType : UpdateSender] priva
   private def isFullyReduced(state: ReductionSet): Boolean =
     val allValuesInState = state.flatten
     allValuesInState == allValuesInState.distinct
-

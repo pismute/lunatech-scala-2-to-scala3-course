@@ -33,6 +33,8 @@ extension[A] (updates: CellUpdates)
 extension (update: (Int, Set[Int]))
   def +: (updates: CellUpdates): CellUpdates = update +: updates
 
+given Eql[CellUpdates, CellUpdates] = Eql.derived
+
 import SudokuDetailProcessor.RowUpdate
 
 extension (update: Vector[SudokuDetailProcessor.RowUpdate]) def toSudokuField: SudokuField =
